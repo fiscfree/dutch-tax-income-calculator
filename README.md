@@ -1,104 +1,187 @@
-# Dutch Tax Income Calculator for Laravel
+# Dutch Tax Income Calculator
 
-A Laravel package for calculating Dutch income tax, social security contributions, and tax credits (loonbelasting, volksverzekeringen, arbeidskorting, algemene heffingskorting). It is 100% based
-on https://github.com/stevermeister/dutch-tax-income-calculator-npm and converted to a Laravel
-package using Claude Opus 4.5. This uses the same data.json file and test csv files as the NPM
-package which should make yearly updates a breeze.
+[![PHP Version](https://img.shields.io/badge/php-%5E8.4-blue)](https://www.php.net/releases/8.4/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+A **framework-agnostic PHP 8.4+** library for calculating Dutch income tax, social security contributions and tax credits. This package is a modern PHP implementation based on the [dutch-tax-income-calculator-npm](https://github.com/stevermeister/dutch-tax-income-calculator-npm) package.
+
+## Features
+
+- **Payroll Tax** (Loonbelasting) calculation
+- **Social Security Contributions** (Volksverzekeringen - AOW, Anw, Wlz)
+- **General Tax Credit** (Algemene Heffingskorting)
+- **Labour Tax Credit** (Arbeidskorting)
+- **Elder Credit** (for retirement age workers)
+- **30% Ruling** (30%-regeling) for expats
+- **Holiday Allowance** (Vakantiegeld - 8%)
+- Support for tax years **2015-2026**
+- **Framework-agnostic** - works with Laravel, Symfony or any PHP project
+
+## Requirements
+
+- PHP 8.4 or higher
 
 ## Installation
-
-Install via Composer:
 
 ```bash
 composer require fiscfree/dutch-tax-income-calculator
 ```
 
-The package will auto-register its service provider in Laravel 10+.
-
-## Usage
-
-### Using the Facade
+## Quick Start
 
 ```php
-use DutchTaxCalculator\Facades\DutchTaxCalculator;
+<?php
 
-$paycheck = DutchTaxCalculator::create(
-    [
-        'income' => 5000,           // Monthly income
-        'allowance' => false,       // Include holiday allowance (vakantiegeld)
-        'socialSecurity' => true,   // Include social security contributions
-        'older' => false,           // After retirement age
-        'hours' => 40,              // Working hours per week
-    ],
-    'Month',                        // Period: 'Year', 'Month', 'Week', 'Day', 'Hour'
-    2025,                           // Tax year
-    ['checked' => false]            // 30% ruling options
+use DutchTaxCalculator\DutchTaxCalculator;
+use DutchTaxCalculator\DTO\SalaryInput;
+use DutchTaxCalculator\Enum\Period;
+
+$calculator = new DutchTaxCalculator();
+
+$result = $calculator->calculate(
+    input: new SalaryInput(
+        income: 60000.00,
+        includeHolidayAllowance: true,
+        socialSecurity: true,
+        reachedRetirementAge: false,
+        hoursPerWeek: 40.0
+    ),
+    period: Period::Year,
+    year: 2026
 );
 
-// Access calculated values
-echo $paycheck->grossYear;          // Annual gross income
-echo $paycheck->netMonth;           // Monthly net income
-echo $paycheck->incomeTax;          // Total income tax
-echo $paycheck->taxCredit;          // Total tax credits
+echo "Gross yearly: " . $result->grossYear . "\n";
+echo "Net yearly: " . $result->netYear . "\n";
+echo "Net monthly: " . $result->netMonth . "\n";
+echo "Income tax: " . $result->incomeTax . "\n";
+echo "Effective tax rate: " . $result->effectiveTaxRate . "%\n";
 ```
 
-### Using Dependency Injection
+## Usage Examples
+
+### Basic Calculation
 
 ```php
-use DutchTaxCalculator\SalaryPaycheckFactory;
+use DutchTaxCalculator\DutchTaxCalculator;
+use DutchTaxCalculator\DTO\SalaryInput;
+use DutchTaxCalculator\Enum\Period;
 
-class SalaryController extends Controller
-{
-    public function calculate(SalaryPaycheckFactory $calculator)
-    {
-        $paycheck = $calculator->create(
-            ['income' => 60000, 'allowance' => true, 'socialSecurity' => true, 'older' => false, 'hours' => 40],
-            'Year',
-            2025,
-            ['checked' => false]
-        );
+$calculator = new DutchTaxCalculator();
 
-        return response()->json($paycheck->toArray());
-    }
-}
+// Calculate from monthly salary
+$result = $calculator->calculate(
+    input: new SalaryInput(income: 5000.00),
+    period: Period::Month,
+    year: 2026
+);
+
+// Access results
+$result->grossYear;      // Annual gross income
+$result->grossMonth;     // Monthly gross income
+$result->netYear;        // Annual net income
+$result->netMonth;       // Monthly net income
+$result->incomeTax;      // Total income tax (negative)
+$result->payrollTax;     // Payroll tax (negative)
+$result->socialTax;      // Social security (negative)
+$result->labourCredit;   // Labour credit (positive)
+$result->generalCredit;  // General credit (positive)
 ```
 
-### Direct Instantiation
+### With 30% Ruling
 
 ```php
-use DutchTaxCalculator\SalaryPaycheck;
-use DutchTaxCalculator\TaxConstants;
+use DutchTaxCalculator\DutchTaxCalculator;
+use DutchTaxCalculator\DTO\SalaryInput;
+use DutchTaxCalculator\DTO\RulingOptions;
+use DutchTaxCalculator\Enum\Period;
+use DutchTaxCalculator\Enum\RulingType;
 
-$constants = new TaxConstants();
-$paycheck = new SalaryPaycheck(
-    ['income' => 5000, 'allowance' => false, 'socialSecurity' => true, 'older' => false, 'hours' => 40],
-    'Month',
-    2025,
-    ['checked' => false],
-    $constants
+$calculator = new DutchTaxCalculator();
+
+// Using factory method (recommended)
+$result = $calculator->calculate(
+    input: new SalaryInput(income: 80000.00),
+    period: Period::Year,
+    year: 2026,
+    ruling: RulingOptions::enabled()  // or enabled(RulingType::YoungMaster)
+);
+
+// Or using constructor
+$result = $calculator->calculate(
+    input: new SalaryInput(income: 80000.00),
+    period: Period::Year,
+    year: 2026,
+    ruling: new RulingOptions(
+        enabled: true,
+        type: RulingType::Normal  // Normal, YoungMaster or Research
+    )
+);
+
+echo "Tax-free amount: " . $result->taxFreeYear . "\n";
+echo "Tax-free percentage: " . $result->taxFreePercent . "%\n";
+```
+
+### Different Input Periods
+
+```php
+// From yearly salary
+$calculator->calculate(
+    input: new SalaryInput(income: 60000.00),
+    period: Period::Year,
+    year: 2026
+);
+
+// From monthly salary
+$calculator->calculate(
+    input: new SalaryInput(income: 5000.00),
+    period: Period::Month,
+    year: 2026
+);
+
+// From weekly salary
+$calculator->calculate(
+    input: new SalaryInput(income: 1154.00),
+    period: Period::Week,
+    year: 2026
+);
+
+// From hourly rate
+$calculator->calculate(
+    input: new SalaryInput(income: 28.85, hoursPerWeek: 40.0),
+    period: Period::Hour,
+    year: 2026
 );
 ```
 
-### 30% Ruling (30%-regeling)
-
-For expatriates who qualify for the 30% ruling:
+### Retirement Age Workers
 
 ```php
-$paycheck = DutchTaxCalculator::create(
-    ['income' => 80000, 'allowance' => false, 'socialSecurity' => true, 'older' => false, 'hours' => 40],
-    'Year',
-    2025,
-    [
-        'checked' => true,
-        'choice' => 'normal'  // Options: 'normal', 'young', 'research'
-    ]
+$result = $calculator->calculate(
+    input: new SalaryInput(
+        income: 50000.00,
+        reachedRetirementAge: true  // No AOW contribution
+    ),
+    period: Period::Year,
+    year: 2026
 );
-
-echo $paycheck->taxFreeYear;  // Tax-free portion of income
-echo $paycheck->taxFree;      // Tax-free percentage
 ```
 
-## Available Properties
+### Without Social Security
+
+```php
+$result = $calculator->calculate(
+    input: new SalaryInput(
+        income: 50000.00,
+        socialSecurity: false  // No volksverzekeringen
+    ),
+    period: Period::Year,
+    year: 2026
+);
+```
+
+## Result Object
+
+The `PaycheckResult` object provides comprehensive access to all calculated values:
 
 | Property | Description |
 |----------|-------------|
@@ -108,14 +191,14 @@ echo $paycheck->taxFree;      // Tax-free percentage
 | `grossDay` | Daily gross income |
 | `grossHour` | Hourly gross income |
 | `grossAllowance` | Holiday allowance (vakantiegeld) |
-| `taxFreeYear` | Tax-free annual amount (30% ruling) |
-| `taxFree` | Tax-free percentage |
-| `taxableYear` | Taxable annual income |
-| `payrollTax` | Payroll tax (loonbelasting) |
-| `socialTax` | Social security contributions |
-| `taxWithoutCredit` | Tax before credits |
-| `labourCredit` | Labour tax credit (arbeidskorting) |
-| `generalCredit` | General tax credit (algemene heffingskorting) |
+| `taxFreeYear` | Tax-free amount (30% ruling) |
+| `taxFreePercent` | Tax-free percentage |
+| `taxableYear` | Annual taxable income |
+| `payrollTax` | Payroll tax (negative) |
+| `socialTax` | Social security (negative) |
+| `taxWithoutCredit` | Total tax before credits |
+| `labourCredit` | Labour credit (positive) |
+| `generalCredit` | General credit (positive) |
 | `taxCredit` | Total tax credits |
 | `incomeTax` | Final income tax |
 | `netYear` | Annual net income |
@@ -124,37 +207,67 @@ echo $paycheck->taxFree;      // Tax-free percentage
 | `netDay` | Daily net income |
 | `netHour` | Hourly net income |
 | `netAllowance` | Net holiday allowance |
+| `effectiveTaxRate` | Effective tax rate (%) |
 
-## Configuration
+## Framework Integration
 
-Publish the configuration file:
+### Laravel
 
-```bash
-php artisan vendor:publish --provider="DutchTaxCalculator\DutchTaxCalculatorServiceProvider" --tag=config
-```
-
-To use custom tax data:
-
-```bash
-php artisan vendor:publish --provider="DutchTaxCalculator\DutchTaxCalculatorServiceProvider" --tag=data
-```
-
-Then update `config/dutch-tax-calculator.php`:
+Register as a singleton in a service provider:
 
 ```php
-return [
-    'data_path' => resource_path('dutch-tax-calculator/data.json'),
-];
+// AppServiceProvider.php
+public function register(): void
+{
+    $this->app->singleton(
+        \DutchTaxCalculator\DutchTaxCalculator::class,
+        fn() => new \DutchTaxCalculator\DutchTaxCalculator()
+    );
+}
+```
+
+### Symfony
+
+Define as a service:
+
+```yaml
+# services.yaml
+services:
+    DutchTaxCalculator\DutchTaxCalculator: ~
 ```
 
 ## Supported Tax Years
 
-The package includes tax data for years 2015-2026.
+The calculator supports tax years 2015-2026. Tax data is sourced from official Belastingdienst publications.
+
+```php
+$calculator->getSupportedYears();  // [2015, 2016, ..., 2026]
+$calculator->getCurrentYear();     // 2026
+$calculator->isYearSupported(2025); // true
+```
+
+## Development
+
+```bash
+# Install dependencies
+composer install
+
+# Run tests
+composer test
+
+# Run static analysis
+composer phpstan
+
+# Fix code style
+composer cs-fix
+```
 
 ## Testing
 
+The calculator is tested against official Belastingdienst tax tables for all supported years:
+
 ```bash
-composer test
+vendor/bin/phpunit
 ```
 
 ## References
@@ -163,6 +276,11 @@ composer test
 - [Loonbelastingtabellen](https://www.belastingdienst.nl/wps/wcm/connect/nl/personeel-en-loon/content/hulpmiddel-loonbelastingtabellen)
 - [30%-regeling](https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/internationaal/werken_wonen/tijdelijk_in_een_ander_land_werken/u_komt_in_nederland_werken/30_procent_regeling/)
 
+## Credits
+
+- Original JavaScript implementation: [dutch-tax-income-calculator-npm](https://github.com/stevermeister/dutch-tax-income-calculator-npm)
+- Tax data source: [Belastingdienst](https://www.belastingdienst.nl/)
+
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) file for details.

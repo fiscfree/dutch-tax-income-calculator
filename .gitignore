@@ -1,0 +1,23 @@
+# Dependencies
+/vendor/
+composer.lock
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# PHPUnit
+/.phpunit.cache/
+.phpunit.result.cache
+
+# PHPStan
+/.phpstan/
+
+# PHP-CS-Fixer
+/.php-cs-fixer.cache
+
+# OS
+.DS_Store
+Thumbs.db
