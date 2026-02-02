@@ -39,7 +39,7 @@ final readonly class BracketCalculator
         foreach ($brackets as $bracket) {
             $delta = $bracket->getDelta();
             $rate = round($multiplier * $bracket->getRateForType($rateType), 5);
-            $isPercent = $rate !== 0.0 && $rate > -1 && $rate < 1;
+            $isPercent = abs($rate) >= PHP_FLOAT_EPSILON && $rate > -1 && $rate < 1;
 
             if ($salary <= $delta) {
                 if ($isPercent) {
